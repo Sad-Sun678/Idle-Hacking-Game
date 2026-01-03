@@ -7,6 +7,9 @@ class Game:
         self.hovered_node = None
 
         self.time_accumulator = 0.0
+        self.active_signals = []
+        # NEW
+        self.prev_blue_active = False
 
     # -------------------------
     # Network ticking
@@ -39,11 +42,26 @@ class Game:
         corp = self.active_corps[0]
         node = self.last_action["node"]
 
-        success = corp.confirm_node_purchase(node, self.player)
+        compromised = corp.confirm_node_purchase(node, self.player)
+
+        # Spawn pulses only if the purchase actually compromised the node
+        if compromised:
+            # "compromised" should be the node object if you changed corp.compromise_node to `return node`
+            source = compromised if compromised is not True else node
+
+            for neighbor_id in source.neighbors:
+                other = corp.get_node_by_id(neighbor_id)
+
+                self.active_signals.append({
+                    "start": source.pos,  # tuple (x,y)
+                    "end": other.pos,  # tuple (x,y)
+                    "t": 0.0,
+                    "speed": 0.6
+                })
 
         # clear action after resolution
         self.last_action = None
-        return success
+        return bool(compromised)
 
     # -------------------------
     # Hover / tooltip support
@@ -62,12 +80,21 @@ class Game:
     # -------------------------
 
     def update(self, dt_seconds):
-        """
-        dt_seconds: elapsed time since last frame (float)
-        """
         self.time_accumulator += dt_seconds
 
-        # allow for catch-up if frame stutters
         while self.time_accumulator >= 1.0:
             self.advance_active_corps_networks()
+
+            # single active corp for now
+            corp = self.active_corps[0]
+
+            # detect inactive -> active transition
+            if corp.blue_team.active and not self.prev_blue_active:
+                # trigger popup here
+                self.on_blue_team_activated()
+
+            self.prev_blue_active = corp.blue_team.active
             self.time_accumulator -= 1.0
+
+    def on_blue_team_activated(self):
+        self.blue_alert_popup.open()
