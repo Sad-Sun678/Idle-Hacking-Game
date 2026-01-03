@@ -288,7 +288,7 @@ class CorporationNetwork:
         self.nodes = nodes
         self.difficulty = difficulty
         self.network_suspicion = 0
-        self.blue_threshold = 5
+        self.blue_threshold = 200
 
         # local, per-corp resources
         self.total_udf_gathered = total_udf_gathered

@@ -53,10 +53,12 @@ class Game:
                 other = corp.get_node_by_id(neighbor_id)
 
                 self.active_signals.append({
-                    "start": source.pos,  # tuple (x,y)
-                    "end": other.pos,  # tuple (x,y)
+                    "origin_id": source.id,
+                    "target_id": other.id,
+                    "start": source.pos,
+                    "end": other.pos,
                     "t": 0.0,
-                    "speed": 0.6
+                    "speed": .7
                 })
 
         # clear action after resolution

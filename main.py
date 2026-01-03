@@ -234,7 +234,7 @@ NODE_COLORS = {
 }
 
 BLUE_ALERT_TEXT = [
-    "⚠ BLUE TEAM DEPLOYED ⚠",
+    " BLUE TEAM DEPLOYED ",
     "",
     "Network defenses are responding.",
     "Expect node reclamation."
@@ -245,12 +245,25 @@ font = pygame.font.SysFont("arial", 18)
 def lerp(a, b, t):
     return a + (b - a) * t
 
-def draw_network(screen, corp, camera, active_signals):
+def draw_network(screen, corp, camera, active_signals, hovered_node):
+    # Build set of active edges (unordered)
+    active_edges = set()
+    for s in active_signals:
+        a = s["origin_id"]
+        b = s["target_id"]
+        active_edges.add((a, b))
+        active_edges.add((b, a))  # allow reverse lookup
+
     # -------- DRAW EDGES --------
     for node in corp.nodes:
         for neighbor_id in node.neighbors:
             other = corp.get_node_by_id(neighbor_id)
-            color = (100, 50, 50) if node.is_compromised else (50, 50, 50)
+
+            # Edge is red if a signal is using it
+            if (node.id, other.id) in active_edges:
+                color = (100, 50, 50)
+            else:
+                color = (50, 50, 50)
 
             pygame.draw.line(
                 screen,
@@ -258,6 +271,19 @@ def draw_network(screen, corp, camera, active_signals):
                 camera.apply(node.pos),
                 camera.apply(other.pos),
                 2
+            )
+
+    # -------- HOVER HIGHLIGHT EDGES --------
+    if hovered_node:
+        for neighbor_id in hovered_node.neighbors:
+            other = corp.get_node_by_id(neighbor_id)
+
+            pygame.draw.line(
+                screen,
+                (200, 200, 255),  # light blue highlight
+                camera.apply(hovered_node.pos),
+                camera.apply(other.pos),
+                4 # thicker outline
             )
 
     # -------- DRAW NODES --------
@@ -301,21 +327,21 @@ def draw_network(screen, corp, camera, active_signals):
 
 
 
-        # Debug telegraph
-        if corp.blue_team.active and corp.blue_team.next_target == node.id:
-            pygame.draw.circle(
-                screen,
-                (240, 200, 40),
-                camera.apply(node.pos),
-                node.radius_size + 6,
-                2
-            )
 
-def update_signals(active_signals, dt):
+
+def update_signals(active_signals, dt, corp):
     for s in active_signals[:]:
+        origin = corp.get_node_by_id(s["origin_id"])
+
+        #Kill the signal if the node is no longer compromised
+        if not origin or not origin.is_compromised:
+            active_signals.remove(s)
+            continue
+
+        # Advance the pulse
         s["t"] += s["speed"] * dt
         if s["t"] >= 1.0:
-            active_signals.remove(s)
+            s["t"] = 0.0
 
 
 def draw_hover_outline(screen, node, camera):
@@ -339,11 +365,11 @@ def tooltip_lines(node):
     return [
         node.node_type,
         f"State: {node.state}",
-        f"Cost: {cost}",
-        f"UDF/sec: {node.udf_per_second}",
-        f"UDF/click: {node.udf_per_click}",
-        f"Credits/sec: {node.credits_per_second}",
-        f"Influence: {node.influence_build_up}/{node.base_unlock_cost}",
+        f"Cost: {cost:.2f}",
+        f"UDF/sec: {node.udf_per_second:.2f}",
+        f"UDF/click: {node.udf_per_click:.2f}",
+        f"Credits/sec: {node.credits_per_second:.2f}",
+        f"Influence: {node.influence_build_up:.2f}/{node.base_unlock_cost:.2f}",
         f"ID: {node.id}",
         f"Neighbors {node.neighbors}"
 
@@ -357,6 +383,7 @@ running = True
 
 while running:
     dt = clock.tick(60) / 1000.0
+    fps = clock.get_fps()
 
     # update camera first
     camera.update(dt)
@@ -390,14 +417,14 @@ while running:
     # advance simulation
     game.update(dt)
     # advance signal pulses
-    update_signals(game.active_signals, dt)
+    update_signals(game.active_signals, dt, corp)
 
     # -------------------------
     # Draw
     # -------------------------
     screen.fill((10, 10, 10))
 
-    draw_network(screen, corp, camera,game.active_signals)
+    draw_network(screen, corp, camera,game.active_signals,game.hovered_node)
     draw_hover_outline(screen, game.hovered_node, camera)
 
     tooltip.draw(screen, mx, my, tooltip_lines(game.hovered_node))
@@ -419,20 +446,24 @@ while running:
 
     # UI text (screen space, no camera)
     screen.blit(
-        font.render(f"Credits: {player.currency['credits']}", True, (220, 220, 220)),
+        font.render(f"Credits: {player.currency['credits']:.2f}", True, (220, 220, 220)),
         (20, 20)
     )
     screen.blit(
-        font.render(f"UDF: {corp.total_udf_gathered}", True, (220, 220, 220)),
+        font.render(f"UDF: {corp.total_udf_gathered:.2f}", True, (220, 220, 220)),
         (20, 45)
     )
     screen.blit(
         font.render(
-            f"Network suspicion: {corp.network_suspicion}",
+            f"Network suspicion: {corp.network_suspicion:.2f}",
             True,
             (220, 220, 220)
         ),
         (20, 65)
+    )
+    screen.blit(
+        font.render(f"FPS: {fps:.1f}", True, (220, 220, 220)),
+        (20, 85)
     )
 
     pygame.display.flip()
